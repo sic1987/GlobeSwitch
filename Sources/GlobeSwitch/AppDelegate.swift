@@ -22,13 +22,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         InputSources.shared.onChange = { [weak self] in self?.updateIcon() }
+        InputSources.shared.warmUp()
         tap.swallowFn = Settings.swallowFn
         tap.onFnTap = { [weak self] in self?.switchNext() }
 
         ensureAccessibility()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.offerToDisableNativeAction()
-        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -67,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startTap() {
         if tap.start() {
             tapRetries = 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.offerToDisableNativeAction()
+            }
         } else if tapRetries < 30 {
             tapRetries += 1
             NSLog("GlobeSwitch: event tap не создан, попытка %d", tapRetries)

@@ -20,6 +20,7 @@ enum CLI {
             }
             return 0
         case "--next", "-n":
+            InputSources.shared.warmUp()
             let t0 = CFAbsoluteTimeGetCurrent()
             guard let next = InputSources.shared.selectNext() else { print("Нет включённых раскладок"); return 1 }
             let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000

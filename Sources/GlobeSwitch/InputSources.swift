@@ -67,6 +67,16 @@ final class InputSources {
         onChange?()
     }
 
+    /// The first real switch in a process costs 100–250 ms (the text-input server's per-process set-up);
+    /// a round trip to the other source and back at start pays that once, so the first 🌐 tap is as fast as the rest.
+    func warmUp() {
+        guard enabled.count >= 2, let currentID = currentID(),
+              let current = enabled.first(where: { $0.id == currentID }),
+              let other = enabled.first(where: { $0.id != currentID }) else { return }
+        select(other)
+        select(current)
+    }
+
     /// Identifier of the source the system currently types with.
     func currentID() -> String? {
         guard let ref = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return nil }
