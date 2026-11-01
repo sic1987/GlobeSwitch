@@ -1,0 +1,226 @@
+import Cocoa
+import ServiceManagement
+
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private var statusItem: NSStatusItem!
+    private let menu = NSMenu()
+    private let tap = FnTap()
+    private let hud = HUD()
+    private var permissionTimer: Timer?
+    private var tapRetries = 0
+    private var lastSwitchMs: Double = 0
+
+    // MARK: - Lifecycle
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = statusItem.button {
+            button.image = NSImage(systemSymbolName: "globe", accessibilityDescription: "GlobeSwitch")
+            button.toolTip = "GlobeSwitch — раскладка по клавише 🌐"
+        }
+        menu.delegate = self
+        statusItem.menu = menu
+
+        InputSources.shared.onChange = { [weak self] in self?.updateIcon() }
+        tap.swallowFn = Settings.swallowFn
+        tap.onFnTap = { [weak self] in self?.switchNext() }
+
+        ensureAccessibility()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.offerToDisableNativeAction()
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        tap.stop()
+    }
+
+    // MARK: - Switching
+
+    private func switchNext() {
+        let t0 = CFAbsoluteTimeGetCurrent()
+        guard let next = InputSources.shared.selectNext() else { return }
+        lastSwitchMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        if Settings.showHUD { hud.show(next.shortCode) }
+    }
+
+    @objc private func selectSource(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String,
+              let source = InputSources.shared.enabled.first(where: { $0.id == id }) else { return }
+        InputSources.shared.select(source)
+        if Settings.showHUD { hud.show(source.shortCode) }
+    }
+
+    // MARK: - Accessibility permission + event tap
+
+    private func ensureAccessibility() {
+        if AXIsProcessTrusted() { startTap(); return }
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
+        permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            guard AXIsProcessTrusted() else { return }
+            timer.invalidate()
+            self?.startTap()
+        }
+    }
+
+    private func startTap() {
+        if tap.start() {
+            tapRetries = 0
+        } else if tapRetries < 30 {
+            tapRetries += 1
+            NSLog("GlobeSwitch: event tap не создан, попытка %d", tapRetries)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.startTap() }
+        }
+        updateIcon()
+    }
+
+    private func updateIcon() {
+        statusItem.button?.appearsDisabled = !tap.isRunning
+    }
+
+    // MARK: - The system's own 🌐 action
+
+    private func offerToDisableNativeAction() {
+        guard !Settings.nativeOfferDismissed else { return }
+        let usage = NativeFnSetting.read()
+        // No key stored = the system default, which on a Mac with a 🌐 key and two layouts is "Change Input Source".
+        let conflicts = usage == .changeInputSource || (usage == nil && InputSources.shared.enabled.count > 1)
+        guard conflicts else { return }
+
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Отключить системное переключение раскладки по клавише 🌐?"
+        alert.informativeText = """
+        Сейчас macOS тоже меняет раскладку по клавише 🌐 (Настройки → Клавиатура → «Нажатие клавиши 🌐»). \
+        GlobeSwitch перехватывает клавишу сам, но чтобы системное действие точно не срабатывало вторым, \
+        его лучше выключить («Ничего не делать»).
+
+        Если после этого система всё ещё переключает раскладку сама — выйдите из системы и войдите снова.
+        """
+        alert.addButton(withTitle: "Отключить")
+        alert.addButton(withTitle: "Открыть настройки")
+        alert.addButton(withTitle: "Позже")
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Больше не спрашивать"
+
+        let response = alert.runModal()
+        if alert.suppressionButton?.state == .on { Settings.nativeOfferDismissed = true }
+        switch response {
+        case .alertFirstButtonReturn:
+            if NativeFnSetting.write(.doNothing) {
+                Settings.nativeOfferDismissed = true
+            } else {
+                openKeyboardSettings()
+            }
+        case .alertSecondButtonReturn:
+            openKeyboardSettings()
+        default:
+            break
+        }
+    }
+
+    // MARK: - Menu
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let sources = InputSources.shared
+        let currentID = sources.currentID()
+
+        if tap.isRunning {
+            let status = NSMenuItem(title: "Активно — нажмите 🌐 для смены раскладки", action: nil, keyEquivalent: "")
+            status.isEnabled = false
+            menu.addItem(status)
+            if lastSwitchMs > 0 {
+                let timing = NSMenuItem(title: String(format: "Последнее переключение: %.1f мс", lastSwitchMs),
+                                        action: nil, keyEquivalent: "")
+                timing.isEnabled = false
+                menu.addItem(timing)
+            }
+        } else {
+            let item = NSMenuItem(title: "Нет разрешения «Универсальный доступ» — открыть…",
+                                  action: #selector(openAccessibilitySettings), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+
+        for source in sources.enabled {
+            let item = NSMenuItem(title: "\(source.shortCode)   \(source.name)",
+                                  action: #selector(selectSource(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = source.id
+            item.state = source.id == currentID ? .on : .off
+            menu.addItem(item)
+        }
+        if sources.enabled.count < 2 {
+            let hint = NSMenuItem(title: "Добавьте вторую раскладку: Настройки → Клавиатура → Источники ввода",
+                                  action: nil, keyEquivalent: "")
+            hint.isEnabled = false
+            menu.addItem(hint)
+        }
+        menu.addItem(.separator())
+
+        addToggle("Показывать индикатор раскладки", on: Settings.showHUD, action: #selector(toggleHUD))
+        addToggle("Перехватывать 🌐 у системы", on: Settings.swallowFn, action: #selector(toggleSwallow),
+                  tip: "Системное действие клавиши 🌐 не получает нажатие. Выключите, если какая-то программа использует Fn (например, как кнопку рации).")
+        addToggle("Запускать при входе в систему", on: loginEnabled, action: #selector(toggleLogin))
+        menu.addItem(.separator())
+
+        let keyboard = NSMenuItem(title: "Системное действие клавиши 🌐…",
+                                  action: #selector(openKeyboardSettings), keyEquivalent: "")
+        keyboard.target = self
+        menu.addItem(keyboard)
+        let about = NSMenuItem(title: "О GlobeSwitch", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+        let quit = NSMenuItem(title: "Выйти", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(quit)
+    }
+
+    private func addToggle(_ title: String, on: Bool, action: Selector, tip: String? = nil) {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.state = on ? .on : .off
+        item.toolTip = tip
+        menu.addItem(item)
+    }
+
+    @objc private func toggleHUD() { Settings.showHUD.toggle() }
+
+    @objc private func toggleSwallow() {
+        Settings.swallowFn.toggle()
+        tap.swallowFn = Settings.swallowFn
+    }
+
+    private var loginEnabled: Bool { SMAppService.mainApp.status == .enabled }
+
+    @objc private func toggleLogin() {
+        do {
+            if loginEnabled { try SMAppService.mainApp.unregister() } else { try SMAppService.mainApp.register() }
+        } catch {
+            NSLog("GlobeSwitch: login item: %@", error.localizedDescription)
+        }
+    }
+
+    @objc private func openKeyboardSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc private func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "GlobeSwitch",
+            .applicationVersion: "1.0",
+            .credits: NSAttributedString(string: "Переключение раскладки по клавише 🌐 (Fn) — мгновенно, без системного индикатора и задержек."),
+        ])
+    }
+}
