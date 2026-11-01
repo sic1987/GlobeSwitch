@@ -25,4 +25,10 @@ enum Settings {
         get { bool("nativeOfferDismissed", default: false) }
         set { defaults.set(newValue, forKey: "nativeOfferDismissed") }
     }
+
+    /// The app already relaunched itself once because the event tap would not start after the permission.
+    static var relaunchedForTap: Bool {
+        get { bool("relaunchedForTap", default: false) }
+        set { defaults.set(newValue, forKey: "relaunchedForTap") }
+    }
 }

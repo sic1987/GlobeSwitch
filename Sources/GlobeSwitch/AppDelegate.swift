@@ -65,15 +65,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startTap() {
         if tap.start() {
             tapRetries = 0
+            Settings.relaunchedForTap = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.offerToDisableNativeAction()
             }
-        } else if tapRetries < 30 {
+        } else {
             tapRetries += 1
-            NSLog("GlobeSwitch: event tap не создан, попытка %d", tapRetries)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.startTap() }
+            NSLog("GlobeSwitch: event tap не создан (попытка %d)", tapRetries)
+            // A permission granted while the app runs is sometimes applied only to a fresh process:
+            // after ~10 s of failures relaunch once, then keep retrying quietly.
+            if tapRetries == 5, !Settings.relaunchedForTap {
+                Settings.relaunchedForTap = true
+                relaunch()
+                return
+            }
+            let delay: TimeInterval = tapRetries < 30 ? 2 : 10
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.startTap() }
         }
         updateIcon()
+    }
+
+    private func relaunch() {
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { _, _ in
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
     }
 
     private func updateIcon() {
