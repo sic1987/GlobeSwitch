@@ -6,7 +6,7 @@ It replaces the built-in "Press 🌐 key to → Change Input Source" action, whi
 sometimes drops presses and shows a slow system indicator.
 
 - one short tap of 🌐 — the next layout; the switch itself takes 3–10 ms;
-- a light `RU` / `EN` indicator for half a second (can be turned off) instead of the system one;
+- a light `FR` / `EN` indicator for half a second (can be turned off) instead of the system one;
 - `Fn+arrows`, `Fn+F1…F12`, `Fn+Delete`, `Fn+E` (emoji) and other combinations work as before;
 - lives in the menu bar (🌐 icon), no windows; launch at login is one menu item;
 - macOS 13 Ventura or newer, Apple Silicon and Intel; any number of layouts, in the order of the
