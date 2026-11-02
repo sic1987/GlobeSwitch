@@ -4,8 +4,15 @@ import Carbon
 /// Watches the keyboard at the HID level and reports a clean tap of the Fn/🌐 key:
 /// Fn pressed and released with no other key, modifier, mouse button or media key in between,
 /// so Fn+arrows, Fn+F-keys, Fn+E (emoji) and the like keep working and never switch the layout.
+///
+/// What the key really sends (measured on macOS 15.7, MacBook Air M3):
+///   * always: flagsChanged keyCode 63 with the Fn flag on press, again without it on release;
+///   * after a SHORT press (< ~0.3 s) the system adds keyDown + keyUp of keyCode 179, the "Globe key" —
+///     that pair is what triggers macOS's own 🌐 action (input source / emoji / dictation).
+/// The switch is driven by the Fn release; the 179 pair is swallowed and otherwise ignored, so a
+/// short tap is one switch, not two.
 final class FnTap {
-    /// Delete the Fn modifier events so macOS's own 🌐-key action never fires.
+    /// Delete the Globe key events (179) so macOS's own 🌐-key action never fires alongside ours.
     var swallowFn = true
     /// Called on the main thread on every clean Fn tap.
     var onFnTap: (() -> Void)?
@@ -16,8 +23,8 @@ final class FnTap {
     private var fnDown = false
     private var comboUsed = false
 
-    private static let fnKeyCode = Int64(kVK_Function)   // 63: Fn/🌐 arrives as a flagsChanged event
-    private static let globeKeyCode: Int64 = 179         // some keyboards report 🌐 as a plain key instead
+    private static let fnKeyCode = Int64(kVK_Function)   // 63: Fn/🌐 as a modifier (flagsChanged)
+    private static let globeKeyCode: Int64 = 179         // "Globe key" pair the system emits after a short tap
     private static let sysDefinedType: UInt32 = 14       // NX_SYSDEFINED: brightness, volume, media keys
 
     /// Creates the event tap on the main run loop. Needs the Accessibility permission.
@@ -67,7 +74,7 @@ final class FnTap {
                 let down = event.flags.contains(.maskSecondaryFn)
                 Log.tap.notice("Fn \(down ? "down" : "up", privacy: .public) flags=0x\(String(event.flags.rawValue, radix: 16), privacy: .public) combo=\(self.comboUsed)")
                 fnChanged(down: down)
-                return swallowFn ? nil : pass
+                return pass   // other apps keep seeing the Fn modifier
             }
             if fnDown {
                 comboUsed = true   // Shift/Ctrl/… pressed while Fn is held
@@ -78,8 +85,8 @@ final class FnTap {
         case .keyDown:
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
             if keyCode == Self.globeKeyCode {
-                Log.tap.notice("globe keyDown (179)")
-                fnChanged(down: true)
+                // The system's own "Globe key" event after a short Fn tap: not a second press.
+                Log.tap.notice("globe keyDown (179) \(self.swallowFn ? "swallowed" : "passed", privacy: .public)")
                 return swallowFn ? nil : pass
             }
             if fnDown {
@@ -90,18 +97,18 @@ final class FnTap {
 
         case .keyUp:
             if event.getIntegerValueField(.keyboardEventKeycode) == Self.globeKeyCode {
-                Log.tap.notice("globe keyUp (179)")
-                fnChanged(down: false)
                 return swallowFn ? nil : pass
             }
             return pass
 
         default:
-            if type.rawValue == Self.sysDefinedType {
-                let ns = NSEvent(cgEvent: event)
-                Log.tap.notice("sysdefined subtype=\(ns?.subtype.rawValue ?? -1) data1=0x\(String(ns?.data1 ?? 0, radix: 16), privacy: .public) fnHeld=\(self.fnDown)")
-            } else if fnDown {
-                Log.tap.notice("mouse/scroll type=\(type.rawValue) while Fn held")
+            if fnDown {
+                if type.rawValue == Self.sysDefinedType {
+                    let ns = NSEvent(cgEvent: event)
+                    Log.tap.notice("sysdefined subtype=\(ns?.subtype.rawValue ?? -1) data1=0x\(String(ns?.data1 ?? 0, radix: 16), privacy: .public) while Fn held")
+                } else {
+                    Log.tap.notice("mouse/scroll type=\(type.rawValue) while Fn held")
+                }
             }
             // Mouse buttons, scroll wheel, system-defined (brightness / media) keys.
             if fnDown { comboUsed = true }

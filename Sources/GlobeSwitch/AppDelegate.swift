@@ -203,7 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         addToggle("Показывать индикатор раскладки", on: Settings.showHUD, action: #selector(toggleHUD))
         addToggle("Перехватывать 🌐 у системы", on: Settings.swallowFn, action: #selector(toggleSwallow),
-                  tip: "Системное действие клавиши 🌐 не получает нажатие. Выключите, если какая-то программа использует Fn (например, как кнопку рации).")
+                  tip: "Системное действие клавиши 🌐 (смена источника ввода, эмодзи, диктовка) не срабатывает. Выключайте только если в настройках macOS для клавиши 🌐 выбрано «Ничего не делать», иначе раскладка переключится дважды.")
         addToggle("Запускать при входе в систему", on: loginEnabled, action: #selector(toggleLogin))
         menu.addItem(.separator())
 

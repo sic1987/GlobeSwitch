@@ -14,7 +14,7 @@ enum Settings {
         set { defaults.set(newValue, forKey: "showHUD") }
     }
 
-    /// Delete the Fn modifier events so the system's own 🌐 action never fires alongside ours.
+    /// Delete the Globe key events (keyCode 179) so the system's own 🌐 action never fires alongside ours.
     static var swallowFn: Bool {
         get { bool("swallowFn", default: true) }
         set { defaults.set(newValue, forKey: "swallowFn") }
