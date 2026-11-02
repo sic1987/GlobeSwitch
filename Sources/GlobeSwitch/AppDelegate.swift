@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Log.sw.notice("switch \(before, privacy: .public) -> \(target.id, privacy: .public): status=\(status) now=\(after, privacy: .public) \(self.lastSwitchMs, format: .fixed(precision: 1)) ms")
 
         if after == target.id {
-            if Settings.showHUD { hud.show(target.shortCode) }
+            showHUD(for: target)
             return
         }
         // Did not take: try again shortly with a freshly resolved reference.
@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             let now = sources.currentID() ?? "?"
             Log.sw.notice("switch retry -> \(target.id, privacy: .public): status=\(retryStatus) now=\(now, privacy: .public)")
-            if Settings.showHUD { self.hud.show(sources.current()?.shortCode ?? "?") }
+            if let current = sources.current() { self.showHUD(for: current) }
         }
     }
 
@@ -67,7 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let id = sender.representedObject as? String,
               let source = InputSources.shared.enabled.first(where: { $0.id == id }) else { return }
         InputSources.shared.select(source)
-        if Settings.showHUD { hud.show(source.shortCode) }
+        showHUD(for: source)
+    }
+
+    private func showHUD(for source: InputSource) {
+        guard Settings.showHUD else { return }
+        hud.show(code: source.shortCode, name: InputSources.shared.disambiguator(for: source))
     }
 
     // MARK: - Accessibility permission + event tap

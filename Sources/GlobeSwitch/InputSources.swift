@@ -105,6 +105,12 @@ final class InputSources {
         return next
     }
 
+    /// The source's name when another enabled source shows the same code (Russian and Russian – PC are both
+    /// "RU"), so the indicator can tell them apart; nil when the code alone is unambiguous.
+    func disambiguator(for source: InputSource) -> String? {
+        enabled.contains { $0.id != source.id && $0.shortCode == source.shortCode } ? source.name : nil
+    }
+
     /// Result of the last TISSelectInputSource call (noErr = 0).
     private(set) var lastSelectStatus: OSStatus = noErr
 

@@ -40,5 +40,6 @@ enum CLI {
       no arguments     run the app (menu-bar icon)
       --list, -l       list the enabled input sources (* = current)
       --next, -n       switch to the next input source and print the time
+      --hud [CODE [NAME]]  preview the indicator for 3 seconds
     """
 }
