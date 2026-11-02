@@ -33,8 +33,10 @@ echo "• swift build -c release (arm64 + x86_64)"
 build_log=$(mktemp)
 slices=()
 for triple in arm64-apple-macosx13.0 x86_64-apple-macosx13.0; do
-  if swift build -c release --triple "$triple" >"$build_log" 2>&1; then
-    slices+=(".build/${triple%-apple-*}-apple-macosx/release/$NAME")
+  # Each slice gets its own scratch path: alternating triples in one .build confuses SwiftPM's cache
+  # ("Objects.LinkFileList not registered").
+  if swift build -c release --triple "$triple" --scratch-path ".build/$triple" >"$build_log" 2>&1; then
+    slices+=(".build/$triple/${triple%-apple-*}-apple-macosx/release/$NAME")
   else
     echo "  $triple failed to build:"; grep -E 'error:' "$build_log" | head -5 || tail -3 "$build_log"
   fi
