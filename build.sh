@@ -1,7 +1,8 @@
 #!/bin/zsh
-# Builds GlobeSwitch.app (release, ad-hoc signed).
+# Builds GlobeSwitch.app (release; universal when the toolchain allows).
 #   ./build.sh            -> build/GlobeSwitch.app
 #   ./build.sh --install  -> also copies it to /Applications (or ~/Applications) and launches it
+#   ./build.sh --zip      -> also packs build/GlobeSwitch-<version>.zip for a GitHub release
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -9,6 +10,15 @@ NAME=GlobeSwitch
 BUNDLE_ID=com.sicdesign.GlobeSwitch
 OUT=build
 APP="$OUT/$NAME.app"
+VERSION=$(plutil -extract CFBundleShortVersionString raw Resources/Info.plist)
+do_install=0; do_zip=0
+for arg in "$@"; do
+  case "$arg" in
+    --install) do_install=1 ;;
+    --zip) do_zip=1 ;;
+    *) echo "неизвестный параметр: $arg" >&2; exit 2 ;;
+  esac
+done
 
 if [[ ! -f Resources/AppIcon.icns ]]; then
   echo "• иконка"
@@ -17,10 +27,18 @@ if [[ ! -f Resources/AppIcon.icns ]]; then
   iconutil -c icns "$OUT/AppIcon.iconset" -o Resources/AppIcon.icns
 fi
 
-echo "• swift build -c release"
-swift build -c release 2>&1 | grep -Ev '^\[|^Fetching|^Creating' || true
-BIN=".build/release/$NAME"
+echo "• swift build -c release (universal: arm64 + x86_64)"
+build_log=$(mktemp)
+if swift build -c release --arch arm64 --arch x86_64 >"$build_log" 2>&1; then
+  BIN=".build/apple/Products/Release/$NAME"
+else
+  echo "  universal не собрался, собираю для $(uname -m)"
+  swift build -c release >"$build_log" 2>&1 || { cat "$build_log"; exit 1; }
+  BIN=".build/release/$NAME"
+fi
+grep -E '^.*error:' "$build_log" || true
 [[ -x "$BIN" ]] || { echo "сборка не удалась: нет $BIN" >&2; exit 1; }
+echo "  архитектуры: $(lipo -archs "$BIN")"
 
 rm -rf "${APP:?}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -52,7 +70,14 @@ else
   echo "Собрано: $APP — подпись ad-hoc (разрешение придётся выдавать заново; см. Tools/make_signing_identity.sh)"
 fi
 
-if [[ "${1:-}" == "--install" ]]; then
+if (( do_zip )); then
+  ZIP="$OUT/$NAME-$VERSION.zip"
+  rm -f "$ZIP"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  echo "Архив: $ZIP ($(du -h "$ZIP" | cut -f1)), sha256 $(shasum -a 256 "$ZIP" | cut -d' ' -f1)"
+fi
+
+if (( do_install )); then
   DEST=/Applications
   [[ -w "$DEST" ]] || DEST="$HOME/Applications"
   mkdir -p "$DEST"

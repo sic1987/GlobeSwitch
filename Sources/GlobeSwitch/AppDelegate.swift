@@ -257,10 +257,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "GlobeSwitch",
-            .applicationVersion: "1.0",
-            .credits: NSAttributedString(string: "Переключение раскладки по клавише 🌐 (Fn) — мгновенно, без системного индикатора и задержек."),
+            .applicationVersion: version,
+            .credits: NSAttributedString(string: """
+            Переключение раскладки по клавише 🌐 (Fn) — мгновенно, без системного индикатора и задержек.
+
+            Автор: sicdesign · sicdesign87@gmail.com
+            github.com/sic1987/GlobeSwitch
+            """),
         ])
     }
 }
