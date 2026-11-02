@@ -28,26 +28,39 @@ cp "$BIN" "$APP/Contents/MacOS/$NAME"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
-codesign --force --sign - --identifier "$BUNDLE_ID" "$APP"
-echo "Собрано: $APP"
+SIGN_NAME="GlobeSwitch Signing"
+SIGN_KC="$HOME/Library/Keychains/GlobeSwitch.keychain-db"
+if [[ -f .signing/keychain-password && -f "$SIGN_KC" ]] \
+   && security find-identity -v -p codesigning "$SIGN_KC" 2>/dev/null | grep -q "$SIGN_NAME"; then
+  security unlock-keychain -p "$(cat .signing/keychain-password)" "$SIGN_KC"
+  codesign --force --sign "$SIGN_NAME" --keychain "$SIGN_KC" --timestamp=none --identifier "$BUNDLE_ID" "$APP"
+  echo "Собрано: $APP — подпись «$SIGN_NAME» (постоянная: разрешение сохраняется между сборками)"
+else
+  codesign --force --sign - --identifier "$BUNDLE_ID" "$APP"
+  echo "Собрано: $APP — подпись ad-hoc (разрешение придётся выдавать заново; см. Tools/make_signing_identity.sh)"
+fi
 
 if [[ "${1:-}" == "--install" ]]; then
   DEST=/Applications
   [[ -w "$DEST" ]] || DEST="$HOME/Applications"
   mkdir -p "$DEST"
-  OLD_HASH=$(codesign -dvvv "$DEST/$NAME.app" 2>&1 | awk -F= '/^CDHash=/{print $2}' || true)
-  NEW_HASH=$(codesign -dvvv "$APP" 2>&1 | awk -F= '/^CDHash=/{print $2}')
+  # macOS keeps the Accessibility grant for the app's *designated requirement*: with the permanent
+  # identity it is "identifier … and certificate leaf = …" (stable), with ad-hoc it is the build's cdhash.
+  OLD_REQ=$(codesign -d -r- "$DEST/$NAME.app" 2>/dev/null | grep '^designated' || true)
+  NEW_REQ=$(codesign -d -r- "$APP" 2>/dev/null | grep '^designated' || true)
   osascript -e "tell application id \"$BUNDLE_ID\" to quit" >/dev/null 2>&1 || true
   pkill -x "$NAME" >/dev/null 2>&1 || true
   sleep 0.5
   rm -rf "${DEST:?}/${NAME:?}.app"
   cp -R "$APP" "$DEST/"
   echo "Установлено: $DEST/$NAME.app"
-  if [[ "$OLD_HASH" != "$NEW_HASH" ]]; then
-    # An ad-hoc signature changes with the code, and the old Accessibility grant would sit there as a
-    # checked box that no longer matches the app: drop it so the app asks afresh.
+  if [[ "$OLD_REQ" != "$NEW_REQ" ]]; then
+    # The old Accessibility grant would sit there as a checked box that no longer matches the app:
+    # drop it so the app asks afresh.
     tccutil reset Accessibility "$BUNDLE_ID" >/dev/null 2>&1 || true
-    echo "Подпись изменилась — разрешение «Универсальный доступ» нужно выдать заново (приложение попросит само)."
+    echo "Требование подписи изменилось — разрешение «Универсальный доступ» нужно выдать заново (приложение попросит само)."
+  else
+    echo "Подпись та же — разрешение «Универсальный доступ» сохраняется."
   fi
   open "$DEST/$NAME.app"
 fi
