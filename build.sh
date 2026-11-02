@@ -16,12 +16,12 @@ for arg in "$@"; do
   case "$arg" in
     --install) do_install=1 ;;
     --zip) do_zip=1 ;;
-    *) echo "неизвестный параметр: $arg" >&2; exit 2 ;;
+    *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
 
 if [[ ! -f Resources/AppIcon.icns ]]; then
-  echo "• иконка"
+  echo "• icon"
   rm -rf "${OUT:?}/AppIcon.iconset"
   swift Tools/make_icon.swift "$OUT/AppIcon.iconset" >/dev/null
   iconutil -c icns "$OUT/AppIcon.iconset" -o Resources/AppIcon.icns
@@ -36,14 +36,14 @@ for triple in arm64-apple-macosx13.0 x86_64-apple-macosx13.0; do
   if swift build -c release --triple "$triple" >"$build_log" 2>&1; then
     slices+=(".build/${triple%-apple-*}-apple-macosx/release/$NAME")
   else
-    echo "  $triple не собрался:"; grep -E 'error:' "$build_log" | head -5 || tail -3 "$build_log"
+    echo "  $triple failed to build:"; grep -E 'error:' "$build_log" | head -5 || tail -3 "$build_log"
   fi
 done
-(( ${#slices} > 0 )) || { echo "сборка не удалась" >&2; exit 1; }
+(( ${#slices} > 0 )) || { echo "build failed" >&2; exit 1; }
 mkdir -p "$OUT"
 BIN="$OUT/$NAME-bin"
 if (( ${#slices} > 1 )); then lipo -create "${slices[@]}" -output "$BIN"; else cp "${slices[1]}" "$BIN"; fi
-echo "  архитектуры: $(lipo -archs "$BIN")"
+echo "  architectures: $(lipo -archs "$BIN")"
 
 rm -rf "${APP:?}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -65,21 +65,21 @@ if [[ -f .signing/keychain-password && -f "$SIGN_KC" ]] \
   if codesign --force --sign "$SIGN_NAME" --timestamp=none --identifier "$BUNDLE_ID" "$APP"; then
     signed_permanent=1
   else
-    echo "Подпись «$SIGN_NAME» не удалась — подписываю ad-hoc." >&2
+    echo "Signing with \"$SIGN_NAME\" failed — signing ad-hoc instead." >&2
   fi
 fi
 if (( signed_permanent )); then
-  echo "Собрано: $APP — подпись «$SIGN_NAME» (постоянная: разрешение сохраняется между сборками)"
+  echo "Built: $APP — signed \"$SIGN_NAME\" (permanent: the Accessibility grant survives rebuilds)"
 else
   codesign --force --sign - --identifier "$BUNDLE_ID" "$APP"
-  echo "Собрано: $APP — подпись ad-hoc (разрешение придётся выдавать заново; см. Tools/make_signing_identity.sh)"
+  echo "Built: $APP — ad-hoc signature (the Accessibility grant will have to be given again; see Tools/make_signing_identity.sh)"
 fi
 
 if (( do_zip )); then
   ZIP="$OUT/$NAME-$VERSION.zip"
   rm -f "$ZIP"
   ditto -c -k --keepParent "$APP" "$ZIP"
-  echo "Архив: $ZIP ($(du -h "$ZIP" | cut -f1)), sha256 $(shasum -a 256 "$ZIP" | cut -d' ' -f1)"
+  echo "Archive: $ZIP ($(du -h "$ZIP" | cut -f1)), sha256 $(shasum -a 256 "$ZIP" | cut -d' ' -f1)"
 fi
 
 if (( do_install )); then
@@ -95,14 +95,14 @@ if (( do_install )); then
   sleep 0.5
   rm -rf "${DEST:?}/${NAME:?}.app"
   cp -R "$APP" "$DEST/"
-  echo "Установлено: $DEST/$NAME.app"
+  echo "Installed: $DEST/$NAME.app"
   if [[ "$OLD_REQ" != "$NEW_REQ" ]]; then
     # The old Accessibility grant would sit there as a checked box that no longer matches the app:
     # drop it so the app asks afresh.
     tccutil reset Accessibility "$BUNDLE_ID" >/dev/null 2>&1 || true
-    echo "Требование подписи изменилось — разрешение «Универсальный доступ» нужно выдать заново (приложение попросит само)."
+    echo "The signing requirement changed — the Accessibility permission must be granted again (the app will ask)."
   else
-    echo "Подпись та же — разрешение «Универсальный доступ» сохраняется."
+    echo "Same signature — the Accessibility permission is kept."
   fi
   open "$DEST/$NAME.app"
 fi

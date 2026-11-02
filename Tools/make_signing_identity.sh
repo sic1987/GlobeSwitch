@@ -12,7 +12,7 @@ PW_FILE="$DIR/keychain-password"
 
 mkdir -p "$DIR"; chmod 700 "$DIR"
 if [[ -f "$KC" ]] && security find-identity -v -p codesigning "$KC" 2>/dev/null | grep -q "$NAME"; then
-  echo "Подпись «$NAME» уже есть в $KC"; exit 0
+  echo "Identity \"$NAME\" already exists in $KC"; exit 0
 fi
 [[ -f "$PW_FILE" ]] || { openssl rand -hex 24 > "$PW_FILE"; chmod 600 "$PW_FILE"; }
 PW=$(cat "$PW_FILE")
@@ -47,7 +47,7 @@ if ! security list-keychains -d user | grep -q "GlobeSwitch.keychain-db"; then
   security list-keychains -d user -s $(security list-keychains -d user | tr -d ' "') "$KC"
 fi
 cp "$TMP/cert.pem" "$DIR/GlobeSwitch-signing.pem"
-echo "Сейчас macOS спросит пароль: это доверие сертификату «$NAME» для подписи кода."
+echo "macOS will now ask for your password: this trusts the \"$NAME\" certificate for code signing."
 security add-trusted-cert -r trustRoot -p codeSign -k "$KC" "$TMP/cert.pem"
 rm -rf "${TMP:?}"
 echo "--- identities in $KC"; security find-identity -v -p codesigning "$KC"

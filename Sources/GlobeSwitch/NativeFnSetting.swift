@@ -8,10 +8,10 @@ enum NativeFnSetting {
 
         var description: String {
             switch self {
-            case .doNothing: return "Ничего не делать"
-            case .changeInputSource: return "Сменить источник ввода"
-            case .showEmoji: return "Показать эмодзи и символы"
-            case .startDictation: return "Начать диктовку"
+            case .doNothing: return "Do Nothing"
+            case .changeInputSource: return "Change Input Source"
+            case .showEmoji: return "Show Emoji & Symbols"
+            case .startDictation: return "Start Dictation"
             }
         }
     }

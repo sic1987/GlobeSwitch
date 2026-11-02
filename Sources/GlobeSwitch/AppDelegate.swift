@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "globe", accessibilityDescription: "GlobeSwitch")
-            button.toolTip = "GlobeSwitch — раскладка по клавише 🌐"
+            button.toolTip = "GlobeSwitch — layout switching on the 🌐 key"
         }
         menu.delegate = self
         statusItem.menu = menu
@@ -130,19 +130,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Отключить системное переключение раскладки по клавише 🌐?"
+        alert.messageText = "Turn off the system's own 🌐 layout switching?"
         alert.informativeText = """
-        Сейчас macOS тоже меняет раскладку по клавише 🌐 (Настройки → Клавиатура → «Нажатие клавиши 🌐»). \
-        GlobeSwitch перехватывает клавишу сам, но чтобы системное действие точно не срабатывало вторым, \
-        его лучше выключить («Ничего не делать»).
+        macOS currently also switches the layout on the 🌐 key (System Settings → Keyboard → "Press 🌐 key to"). \
+        GlobeSwitch intercepts the key itself, but to make sure the system action never fires as well, \
+        it is best set to "Do Nothing".
 
-        Если после этого система всё ещё переключает раскладку сама — выйдите из системы и войдите снова.
+        If the system still switches the layout on its own after this, log out and back in.
         """
-        alert.addButton(withTitle: "Отключить")
-        alert.addButton(withTitle: "Открыть настройки")
-        alert.addButton(withTitle: "Позже")
+        alert.addButton(withTitle: "Turn Off")
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Later")
         alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Больше не спрашивать"
+        alert.suppressionButton?.title = "Don't ask again"
 
         let response = alert.runModal()
         if alert.suppressionButton?.state == .on { Settings.nativeOfferDismissed = true }
@@ -168,17 +168,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let currentID = sources.currentID()
 
         if tap.isRunning {
-            let status = NSMenuItem(title: "Активно — нажмите 🌐 для смены раскладки", action: nil, keyEquivalent: "")
+            let status = NSMenuItem(title: "Active — press 🌐 to switch the layout", action: nil, keyEquivalent: "")
             status.isEnabled = false
             menu.addItem(status)
             if lastSwitchMs > 0 {
-                let timing = NSMenuItem(title: String(format: "Последнее переключение: %.1f мс", lastSwitchMs),
+                let timing = NSMenuItem(title: String(format: "Last switch: %.1f ms", lastSwitchMs),
                                         action: nil, keyEquivalent: "")
                 timing.isEnabled = false
                 menu.addItem(timing)
             }
         } else {
-            let item = NSMenuItem(title: "Нет разрешения «Универсальный доступ» — открыть…",
+            let item = NSMenuItem(title: "No Accessibility permission — open settings…",
                                   action: #selector(openAccessibilitySettings), keyEquivalent: "")
             item.target = self
             menu.addItem(item)
@@ -194,27 +194,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(item)
         }
         if sources.enabled.count < 2 {
-            let hint = NSMenuItem(title: "Добавьте вторую раскладку: Настройки → Клавиатура → Источники ввода",
+            let hint = NSMenuItem(title: "Add a second layout: System Settings → Keyboard → Input Sources",
                                   action: nil, keyEquivalent: "")
             hint.isEnabled = false
             menu.addItem(hint)
         }
         menu.addItem(.separator())
 
-        addToggle("Показывать индикатор раскладки", on: Settings.showHUD, action: #selector(toggleHUD))
-        addToggle("Перехватывать 🌐 у системы", on: Settings.swallowFn, action: #selector(toggleSwallow),
-                  tip: "Системное действие клавиши 🌐 (смена источника ввода, эмодзи, диктовка) не срабатывает. Выключайте только если в настройках macOS для клавиши 🌐 выбрано «Ничего не делать», иначе раскладка переключится дважды.")
-        addToggle("Запускать при входе в систему", on: loginEnabled, action: #selector(toggleLogin))
+        addToggle("Show layout indicator", on: Settings.showHUD, action: #selector(toggleHUD))
+        addToggle("Intercept 🌐 from the system", on: Settings.swallowFn, action: #selector(toggleSwallow),
+                  tip: "The system's own 🌐 key action (input source, emoji, dictation) does not fire. Turn this off only if the 🌐 key is set to \"Do Nothing\" in macOS settings, otherwise the layout switches twice.")
+        addToggle("Launch at login", on: loginEnabled, action: #selector(toggleLogin))
         menu.addItem(.separator())
 
-        let keyboard = NSMenuItem(title: "Системное действие клавиши 🌐…",
+        let keyboard = NSMenuItem(title: "System 🌐 key action…",
                                   action: #selector(openKeyboardSettings), keyEquivalent: "")
         keyboard.target = self
         menu.addItem(keyboard)
-        let about = NSMenuItem(title: "О GlobeSwitch", action: #selector(showAbout), keyEquivalent: "")
+        let about = NSMenuItem(title: "About GlobeSwitch", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
         menu.addItem(about)
-        let quit = NSMenuItem(title: "Выйти", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
     }
 
@@ -262,9 +262,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .applicationName: "GlobeSwitch",
             .applicationVersion: version,
             .credits: NSAttributedString(string: """
-            Переключение раскладки по клавише 🌐 (Fn) — мгновенно, без системного индикатора и задержек.
+            Switches the keyboard layout on the 🌐 (Fn) key — instantly, without the system indicator and its delays.
 
-            Автор: sicdesign · sicdesign87@gmail.com
+            Author: sicdesign · sicdesign87@gmail.com
             github.com/sic1987/GlobeSwitch
             """),
         ])
