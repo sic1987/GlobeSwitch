@@ -1,5 +1,6 @@
 import Carbon
 import Foundation
+import os
 
 /// One enabled keyboard input source (a layout such as "Russian - PC" or an input mode).
 struct InputSource {
@@ -43,7 +44,10 @@ final class InputSources {
             object: nil, queue: .main) { [weak self] _ in self?.refresh() })
         observers.append(center.addObserver(
             forName: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
-            object: nil, queue: .main) { [weak self] _ in self?.onChange?() })
+            object: nil, queue: .main) { [weak self] _ in
+                Log.sw.notice("system: selected source is now \(self?.currentID() ?? "?", privacy: .public)")
+                self?.onChange?()
+            })
     }
 
     static func property<T>(_ ref: TISInputSource, _ key: CFString) -> T? {
@@ -101,9 +105,21 @@ final class InputSources {
         return next
     }
 
+    /// Result of the last TISSelectInputSource call (noErr = 0).
+    private(set) var lastSelectStatus: OSStatus = noErr
+
     @discardableResult
     func select(_ source: InputSource) -> Bool {
-        TISSelectInputSource(source.ref) == noErr
+        lastSelectStatus = TISSelectInputSource(source.ref)
+        return lastSelectStatus == noErr
+    }
+
+    /// A fresh TISInputSource for the id (the cached ref could in theory go stale); nil if not enabled.
+    func freshRef(for id: String) -> TISInputSource? {
+        let filter: [String: Any] = [kTISPropertyInputSourceID as String: id]
+        guard let cf = TISCreateInputSourceList(filter as CFDictionary, false)?.takeRetainedValue(),
+              let refs = (cf as NSArray) as? [TISInputSource] else { return nil }
+        return refs.first
     }
 
     /// Orders the sources like the system's input menu (com.apple.HIToolbox AppleEnabledInputSources);

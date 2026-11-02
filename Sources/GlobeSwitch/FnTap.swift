@@ -62,29 +62,47 @@ final class FnTap {
             return pass
 
         case .flagsChanged:
-            if event.getIntegerValueField(.keyboardEventKeycode) == Self.fnKeyCode {
-                fnChanged(down: event.flags.contains(.maskSecondaryFn))
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            if keyCode == Self.fnKeyCode {
+                let down = event.flags.contains(.maskSecondaryFn)
+                Log.tap.notice("Fn \(down ? "down" : "up", privacy: .public) flags=0x\(String(event.flags.rawValue, radix: 16), privacy: .public) combo=\(self.comboUsed)")
+                fnChanged(down: down)
                 return swallowFn ? nil : pass
             }
-            if fnDown { comboUsed = true }   // Shift/Ctrl/… pressed while Fn is held
+            if fnDown {
+                comboUsed = true   // Shift/Ctrl/… pressed while Fn is held
+                Log.tap.notice("modifier keyCode=\(keyCode) while Fn held")
+            }
             return pass
 
         case .keyDown:
-            if event.getIntegerValueField(.keyboardEventKeycode) == Self.globeKeyCode {
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            if keyCode == Self.globeKeyCode {
+                Log.tap.notice("globe keyDown (179)")
                 fnChanged(down: true)
                 return swallowFn ? nil : pass
             }
-            if fnDown { comboUsed = true }
+            if fnDown {
+                comboUsed = true
+                Log.tap.notice("key keyCode=\(keyCode) while Fn held")
+            }
             return pass
 
         case .keyUp:
             if event.getIntegerValueField(.keyboardEventKeycode) == Self.globeKeyCode {
+                Log.tap.notice("globe keyUp (179)")
                 fnChanged(down: false)
                 return swallowFn ? nil : pass
             }
             return pass
 
         default:
+            if type.rawValue == Self.sysDefinedType {
+                let ns = NSEvent(cgEvent: event)
+                Log.tap.notice("sysdefined subtype=\(ns?.subtype.rawValue ?? -1) data1=0x\(String(ns?.data1 ?? 0, radix: 16), privacy: .public) fnHeld=\(self.fnDown)")
+            } else if fnDown {
+                Log.tap.notice("mouse/scroll type=\(type.rawValue) while Fn held")
+            }
             // Mouse buttons, scroll wheel, system-defined (brightness / media) keys.
             if fnDown { comboUsed = true }
             return pass
@@ -97,7 +115,11 @@ final class FnTap {
             comboUsed = false
         } else if fnDown {
             fnDown = false
-            if !comboUsed { onFnTap?() }
+            if !comboUsed {
+                // Leave the tap callback first: WindowServer waits for our answer, and the text-input
+                // server's switch must not be requested while it does.
+                DispatchQueue.main.async { [weak self] in self?.onFnTap?() }
+            }
         }
     }
 }

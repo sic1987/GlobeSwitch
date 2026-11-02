@@ -1,3 +1,4 @@
+import Carbon
 import Cocoa
 import ServiceManagement
 
@@ -36,10 +37,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Switching
 
     private func switchNext() {
+        let sources = InputSources.shared
+        let before = sources.currentID() ?? "?"
         let t0 = CFAbsoluteTimeGetCurrent()
-        guard let next = InputSources.shared.selectNext() else { return }
+        guard let target = sources.selectNext() else { Log.sw.notice("switch: no enabled sources"); return }
+        let status = sources.lastSelectStatus
+        let after = sources.currentID() ?? "?"
         lastSwitchMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
-        if Settings.showHUD { hud.show(next.shortCode) }
+        Log.sw.notice("switch \(before, privacy: .public) -> \(target.id, privacy: .public): status=\(status) now=\(after, privacy: .public) \(self.lastSwitchMs, format: .fixed(precision: 1)) ms")
+
+        if after == target.id {
+            if Settings.showHUD { hud.show(target.shortCode) }
+            return
+        }
+        // Did not take: try again shortly with a freshly resolved reference.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { [weak self] in
+            guard let self else { return }
+            var retryStatus: OSStatus = -1
+            if let ref = sources.freshRef(for: target.id) {
+                retryStatus = TISSelectInputSource(ref)
+            }
+            let now = sources.currentID() ?? "?"
+            Log.sw.notice("switch retry -> \(target.id, privacy: .public): status=\(retryStatus) now=\(now, privacy: .public)")
+            if Settings.showHUD { self.hud.show(sources.current()?.shortCode ?? "?") }
+        }
     }
 
     @objc private func selectSource(_ sender: NSMenuItem) {
@@ -66,12 +87,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if tap.start() {
             tapRetries = 0
             Settings.relaunchedForTap = false
+            Log.tap.notice("event tap started (swallowFn=\(self.tap.swallowFn))")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.offerToDisableNativeAction()
             }
         } else {
             tapRetries += 1
-            NSLog("GlobeSwitch: event tap не создан (попытка %d)", tapRetries)
+            Log.tap.notice("event tap NOT created, attempt \(self.tapRetries), AXIsProcessTrusted=\(AXIsProcessTrusted())")
             // A permission granted while the app runs is sometimes applied only to a fresh process:
             // after ~10 s of failures relaunch once, then keep retrying quietly.
             if tapRetries == 5, !Settings.relaunchedForTap {
