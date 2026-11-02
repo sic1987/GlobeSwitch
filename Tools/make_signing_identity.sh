@@ -42,6 +42,10 @@ security set-keychain-settings "$KC"                 # never auto-lock
 security unlock-keychain -p "$PW" "$KC"
 security import "$TMP/id.p12" -k "$KC" -P p12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PW" "$KC" >/dev/null
+# codesign looks identities up through the user's keychain search list only.
+if ! security list-keychains -d user | grep -q "GlobeSwitch.keychain-db"; then
+  security list-keychains -d user -s $(security list-keychains -d user | tr -d ' "') "$KC"
+fi
 cp "$TMP/cert.pem" "$DIR/GlobeSwitch-signing.pem"
 echo "Сейчас macOS спросит пароль: это доверие сертификату «$NAME» для подписи кода."
 security add-trusted-cert -r trustRoot -p codeSign -k "$KC" "$TMP/cert.pem"

@@ -30,10 +30,22 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 SIGN_NAME="GlobeSwitch Signing"
 SIGN_KC="$HOME/Library/Keychains/GlobeSwitch.keychain-db"
+signed_permanent=0
 if [[ -f .signing/keychain-password && -f "$SIGN_KC" ]] \
    && security find-identity -v -p codesigning "$SIGN_KC" 2>/dev/null | grep -q "$SIGN_NAME"; then
+  # codesign finds identities only through the user's keychain search list (its --keychain flag does not
+  # find this one), so make sure the keychain is listed, then unlock it with the stored password.
+  if ! security list-keychains -d user | grep -q "GlobeSwitch.keychain-db"; then
+    security list-keychains -d user -s $(security list-keychains -d user | tr -d ' "') "$SIGN_KC"
+  fi
   security unlock-keychain -p "$(cat .signing/keychain-password)" "$SIGN_KC"
-  codesign --force --sign "$SIGN_NAME" --keychain "$SIGN_KC" --timestamp=none --identifier "$BUNDLE_ID" "$APP"
+  if codesign --force --sign "$SIGN_NAME" --timestamp=none --identifier "$BUNDLE_ID" "$APP"; then
+    signed_permanent=1
+  else
+    echo "Подпись «$SIGN_NAME» не удалась — подписываю ad-hoc." >&2
+  fi
+fi
+if (( signed_permanent )); then
   echo "Собрано: $APP — подпись «$SIGN_NAME» (постоянная: разрешение сохраняется между сборками)"
 else
   codesign --force --sign - --identifier "$BUNDLE_ID" "$APP"
