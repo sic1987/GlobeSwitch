@@ -63,7 +63,7 @@ permission from being reset on every rebuild, run `Tools/make_signing_identity.s
 
 - the list of enabled layouts — a check mark on the current one, a click selects a layout by hand;
 - the time of the last switch in milliseconds;
-- **Show layout indicator** — `RU` / `EN` for 0.6 s after a switch; when several enabled layouts share
+- **Show layout indicator** — `FR` / `EN` for 0.6 s after a switch; when several enabled layouts share
   a code (Russian and Russian – PC, ABC and Dvorak, Hiragana and Katakana) the layout's name is shown
   under the code;
 - **Intercept 🌐 from the system** — keep the Globe key event from the system so its own action
