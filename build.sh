@@ -27,17 +27,22 @@ if [[ ! -f Resources/AppIcon.icns ]]; then
   iconutil -c icns "$OUT/AppIcon.iconset" -o Resources/AppIcon.icns
 fi
 
-echo "• swift build -c release (universal: arm64 + x86_64)"
+# SwiftPM's own `--arch a --arch b` needs Xcode's xcbuild; with Command Line Tools alone each slice
+# is built with --triple and the two are joined by lipo. A slice that fails to build is skipped.
+echo "• swift build -c release (arm64 + x86_64)"
 build_log=$(mktemp)
-if swift build -c release --arch arm64 --arch x86_64 >"$build_log" 2>&1; then
-  BIN=".build/apple/Products/Release/$NAME"
-else
-  echo "  universal не собрался, собираю для $(uname -m)"
-  swift build -c release >"$build_log" 2>&1 || { cat "$build_log"; exit 1; }
-  BIN=".build/release/$NAME"
-fi
-grep -E '^.*error:' "$build_log" || true
-[[ -x "$BIN" ]] || { echo "сборка не удалась: нет $BIN" >&2; exit 1; }
+slices=()
+for triple in arm64-apple-macosx13.0 x86_64-apple-macosx13.0; do
+  if swift build -c release --triple "$triple" >"$build_log" 2>&1; then
+    slices+=(".build/${triple%-apple-*}-apple-macosx/release/$NAME")
+  else
+    echo "  $triple не собрался:"; grep -E 'error:' "$build_log" | head -5 || tail -3 "$build_log"
+  fi
+done
+(( ${#slices} > 0 )) || { echo "сборка не удалась" >&2; exit 1; }
+mkdir -p "$OUT"
+BIN="$OUT/$NAME-bin"
+if (( ${#slices} > 1 )); then lipo -create "${slices[@]}" -output "$BIN"; else cp "${slices[1]}" "$BIN"; fi
 echo "  архитектуры: $(lipo -archs "$BIN")"
 
 rm -rf "${APP:?}"
