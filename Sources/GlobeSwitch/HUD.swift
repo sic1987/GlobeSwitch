@@ -22,7 +22,7 @@ final class HUD {
         panel.level = .screenSaver
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false   // the window shadow draws a light 1 px rim round a borderless panel
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
@@ -34,6 +34,9 @@ final class HUD {
         effect.blendingMode = .behindWindow
         effect.state = .active
         effect.appearance = NSAppearance(named: .darkAqua)
+        // A behind-window blur is shaped by the window server, so a layer corner radius does not clip it:
+        // the rounded shape has to come from a mask image (stretchable, corners kept by the cap insets).
+        effect.maskImage = HUD.roundedMask(radius: 18)
         effect.wantsLayer = true
         effect.layer?.cornerRadius = 18
         effect.layer?.masksToBounds = true
@@ -53,6 +56,18 @@ final class HUD {
         effect.addSubview(codeLabel)
         effect.addSubview(nameLabel)
         panel.contentView = effect
+    }
+
+    private static func roundedMask(radius r: CGFloat) -> NSImage {
+        let side = r * 2 + 1
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
+        image.resizingMode = .stretch
+        return image
     }
 
     /// `name` is shown under the code; pass it only when the code alone is ambiguous.
