@@ -1,0 +1,4 @@
+#!/bin/bash
+# Quit a running copy before its files are replaced.
+pkill -x GlobeSwitch 2>/dev/null || true
+exit 0

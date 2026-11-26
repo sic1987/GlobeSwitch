@@ -26,6 +26,15 @@ The script downloads the latest release from GitHub, puts `GlobeSwitch.app` into
 removes the quarantine flag and launches the app. [The script](install.sh) is 40 lines — read it
 first if you like.
 
+### Installer package
+
+Download `GlobeSwitch-x.y.z.pkg` from [Releases](https://github.com/sic1987/GlobeSwitch/releases) and
+double-click it. The installer puts `GlobeSwitch.app` into Applications (it asks for your Mac
+password) and launches the app at the end.
+
+The package is not signed by Apple, so macOS may refuse to open it at first: open **System Settings →
+Privacy & Security**, click **"Open Anyway"** at the bottom and confirm, then run the package again.
+
 ### Manually
 
 1. Download `GlobeSwitch-x.y.z.zip` from [Releases](https://github.com/sic1987/GlobeSwitch/releases),
@@ -56,7 +65,8 @@ cd GlobeSwitch
 ```
 
 `build.sh` builds `build/GlobeSwitch.app` (SwiftPM, release, universal), `--install` copies it into
-Applications and launches it, `--zip` packs an archive for a release. To keep the Accessibility
+Applications and launches it, `--zip` packs an archive for a release, `--pkg` builds the installer
+package (`pkgbuild` + `productbuild`, pages and scripts in `pkg/`). To keep the Accessibility
 permission from being reset on every rebuild, run `Tools/make_signing_identity.sh` once.
 
 ## App menu

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>GlobeSwitch @VERSION@</title>
+    <organization>com.sicdesign</organization>
+    <domains enable_localSystem="true"/>
+    <options customize="never" require-scripts="true" rootVolumeOnly="true" hostArchitectures="arm64,x86_64"/>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <license file="license.txt" mime-type="text/plain"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="13.0"/>
+        </allowed-os-versions>
+    </volume-check>
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.sicdesign.GlobeSwitch"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.sicdesign.GlobeSwitch" visible="false">
+        <pkg-ref id="com.sicdesign.GlobeSwitch"/>
+    </choice>
+    <pkg-ref id="com.sicdesign.GlobeSwitch" version="@VERSION@" onConclusion="none">GlobeSwitch-component.pkg</pkg-ref>
+</installer-gui-script>

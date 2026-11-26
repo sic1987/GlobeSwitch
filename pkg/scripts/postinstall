@@ -1,0 +1,11 @@
+#!/bin/bash
+APP="/Applications/GlobeSwitch.app"
+# Payload files carry no quarantine flag, but make sure a re-downloaded copy is not held back either.
+xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+# The installer runs as root: launch the app for the person logged in at the console.
+USER_NAME=$(stat -f %Su /dev/console)
+if [ -n "$USER_NAME" ] && [ "$USER_NAME" != "root" ]; then
+  USER_ID=$(id -u "$USER_NAME")
+  launchctl asuser "$USER_ID" sudo -u "$USER_NAME" open "$APP" 2>/dev/null || true
+fi
+exit 0

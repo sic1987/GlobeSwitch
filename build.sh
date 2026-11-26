@@ -3,6 +3,7 @@
 #   ./build.sh            -> build/GlobeSwitch.app
 #   ./build.sh --install  -> also copies it to /Applications (or ~/Applications) and launches it
 #   ./build.sh --zip      -> also packs build/GlobeSwitch-<version>.zip for a GitHub release
+#   ./build.sh --pkg      -> also builds the installer build/GlobeSwitch-<version>.pkg (pkgbuild + productbuild)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -11,11 +12,12 @@ BUNDLE_ID=com.sicdesign.GlobeSwitch
 OUT=build
 APP="$OUT/$NAME.app"
 VERSION=$(plutil -extract CFBundleShortVersionString raw Resources/Info.plist)
-do_install=0; do_zip=0
+do_install=0; do_zip=0; do_pkg=0
 for arg in "$@"; do
   case "$arg" in
     --install) do_install=1 ;;
     --zip) do_zip=1 ;;
+    --pkg) do_pkg=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -82,6 +84,35 @@ if (( do_zip )); then
   rm -f "$ZIP"
   ditto -c -k --keepParent "$APP" "$ZIP"
   echo "Archive: $ZIP ($(du -h "$ZIP" | cut -f1)), sha256 $(shasum -a 256 "$ZIP" | cut -d' ' -f1)"
+fi
+
+if (( do_pkg )); then
+  # Installer package: a component pkg of the app (not relocatable, so it always lands in /Applications)
+  # wrapped by productbuild with the welcome / license / conclusion pages from pkg/.
+  PKGDIR="$OUT/pkg"
+  rm -rf "${PKGDIR:?}"
+  mkdir -p "$PKGDIR/root" "$PKGDIR/res"
+  cp -R "$APP" "$PKGDIR/root/"
+  xattr -cr "$PKGDIR/root/$NAME.app"   # else every extended attribute becomes a ._ file in the payload
+  pkgbuild --analyze --root "$PKGDIR/root" "$PKGDIR/component.plist" >/dev/null
+  python3 - "$PKGDIR/component.plist" <<'PYEOF'
+import plistlib, sys
+path = sys.argv[1]
+with open(path, "rb") as f: items = plistlib.load(f)
+for item in items: item["BundleIsRelocatable"] = False
+with open(path, "wb") as f: plistlib.dump(items, f)
+PYEOF
+  pkgbuild --root "$PKGDIR/root" --component-plist "$PKGDIR/component.plist" \
+    --install-location /Applications --identifier "$BUNDLE_ID" --version "$VERSION" \
+    --scripts pkg/scripts "$PKGDIR/GlobeSwitch-component.pkg" >/dev/null
+  sed "s/@VERSION@/$VERSION/g" pkg/distribution.xml > "$PKGDIR/distribution.xml"
+  cp pkg/resources/*.html "$PKGDIR/res/"
+  cp LICENSE "$PKGDIR/res/license.txt"
+  PKG="$OUT/$NAME-$VERSION.pkg"
+  rm -f "$PKG"
+  productbuild --distribution "$PKGDIR/distribution.xml" --resources "$PKGDIR/res" \
+    --package-path "$PKGDIR" "$PKG" >/dev/null
+  echo "Installer: $PKG ($(du -h "$PKG" | cut -f1)), sha256 $(shasum -a 256 "$PKG" | cut -d' ' -f1)"
 fi
 
 if (( do_install )); then
